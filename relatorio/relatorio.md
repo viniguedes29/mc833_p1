@@ -23,3 +23,150 @@ Considera-se também que a requisição HTTP enviada pelo cliente pode ser receb
 Os arquivos solicitados são lidos em modo binário, permitindo que o servidor envie tanto arquivos de texto quanto imagens e outros tipos de conteúdo. O tipo MIME do recurso é determinado a partir da extensão do arquivo e incluído no cabeçalho `Content-Type` da resposta. Caso o tipo do arquivo não possa ser identificado, é utilizado como fallback o tipo genérico `application/octet-stream`. Para os arquivos disponibilizados como parte do Servidor Web utilizado nos testes, espera-se que seus respectivos tipos MIME possam ser identificados normalmente.
 
 Por se tratar de uma implementação de caráter didático, foram priorizados os requisitos definidos para o projeto e os conceitos abordados na disciplina. Dessa forma, não foram implementados mecanismos adicionais de segurança, robustez, otimização ou compatibilidade que ultrapassem o escopo estabelecido para o trabalho.
+
+# Descrição geral e casos de uso
+
+O funcionamento do servidor foi organizado de forma modular, com cada etapa do processamento sendo atribuída a uma função específica. De maneira geral, a aplicação inicia e configura um socket TCP, permanece aguardando conexões de clientes e, a cada nova conexão recebida, cria uma thread responsável por realizar o atendimento daquele cliente. A partir dessa thread, a mensagem recebida pela conexão é processada pelo servidor. Inicialmente, os dados são recebidos pelo socket e interpretados de acordo com a estrutura esperada para uma requisição HTTP. Em seguida, são realizadas as etapas de validação da mensagem, identificação do recurso solicitado, leitura do arquivo correspondente e construção e envio da resposta ao cliente.
+
+A rotina `main()` é responsável pela inicialização do servidor e pelo controle do fluxo principal da aplicação. Seu funcionamento pode ser dividido em duas etapas: a inicialização e configuração do socket do servidor e o laço responsável por aceitar conexões e criar as threads de atendimento.
+
+## Inicialização e configuração do servidor
+
+A execução do servidor é iniciada pela criação de um socket TCP utilizando a família de endereços `AF_INET` e o tipo `SOCK_STREAM`. A primeira opção indica a utilização de endereços IPv4, enquanto a segunda especifica o uso de um socket orientado a conexão, correspondente ao protocolo TCP.
+
+```python
+server_socket = socket(AF_INET, SOCK_STREAM)
+```
+
+Em seguida, é configurada a opção `SO_REUSEADDR` no socket do servidor:
+
+```python
+server_socket.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+```
+
+Essa configuração permite que o endereço e a porta utilizados pelo servidor possam ser reutilizados após sua interrupção e reinicialização. Dessa forma, evita-se que uma nova execução do programa seja temporariamente impedida porque o sistema operacional ainda mantém informações associadas à execução anterior.
+
+Após essa configuração, o socket é associado à porta definida pela constante `SERVER_PORT`:
+
+```python
+server_socket.bind(("", SERVER_PORT))
+```
+
+O endereço vazio passado ao método `bind()` faz com que o servidor aceite conexões destinadas a qualquer uma das interfaces de rede disponíveis na máquina. A porta utilizada é definida previamente pela aplicação, permitindo que os clientes saibam em qual porta devem estabelecer a conexão TCP.
+
+Em seguida, o socket é colocado em modo de escuta por meio do método `listen()`:
+
+```python
+server_socket.listen(5)
+```
+
+A partir desse momento, o socket passa a estar preparado para receber solicitações de conexão. O valor `5` define o tamanho máximo da fila de conexões pendentes que podem aguardar até serem aceitas pela aplicação.
+
+Por fim, uma mensagem é exibida no terminal para indicar que a inicialização foi concluída e que o servidor está pronto para receber conexões:
+
+```python
+print(f"Server listening on port {SERVER_PORT}")
+```
+
+## Laço de atendimento e criação de threads
+
+Após a configuração do socket, o servidor entra em um laço de execução contínua. Esse laço representa a rotina principal de atendimento e permanece ativo enquanto o programa estiver em execução.
+
+```python
+while True:
+    print("Ready to serve...")
+
+    connection_socket, addr = server_socket.accept()
+```
+
+A chamada ao método `accept()` bloqueia a execução da thread principal até que um cliente estabeleça uma nova conexão TCP. Quando uma conexão é aceita, são obtidos dois valores: `connection_socket`, que representa um novo socket utilizado exclusivamente para a comunicação com aquele cliente, e `addr`, que contém as informações de endereço do cliente conectado.
+
+O socket `server_socket` continua sendo utilizado somente para receber novas conexões. O atendimento da conexão recém-estabelecida é delegado ao novo socket retornado por `accept()`.
+
+Para permitir o atendimento simultâneo de múltiplos clientes, uma nova thread é criada para cada conexão aceita:
+
+```python
+client_thread = Thread(
+    target=handle_client,
+    args=(connection_socket, addr)
+)
+
+client_thread.start()
+```
+
+A função `handle_client` é definida como alvo da thread e recebe como argumentos o socket da conexão e o endereço do cliente. A chamada ao método `start()` inicia a execução da nova thread, que passa a realizar de forma independente todo o processamento relacionado àquela conexão.
+
+Dessa maneira, a thread principal não precisa aguardar o término do atendimento do cliente atual. Logo após iniciar a nova thread, ela retorna ao início do laço e executa novamente `accept()`, ficando disponível para receber outras conexões. Assim, diferentes clientes podem ser atendidos simultaneamente por threads distintas.
+
+De forma simplificada, o fluxo executado pela rotina principal pode ser representado como:
+
+```text
+Inicialização do servidor
+        |
+        v
+Criação e configuração do socket
+        |
+        v
+     listen()
+        |
+        v
+     accept()
+        |
+        +------> nova thread ---> handle_client()
+        |
+        v
+     accept()
+        |
+        +------> nova thread ---> handle_client()
+        |
+       ...
+```
+
+O laço é executado dentro de um bloco `try`, permitindo que o servidor seja interrompido manualmente por meio de uma exceção `KeyboardInterrupt`. Nesse caso, a interrupção é informada no terminal e, independentemente da forma como o laço seja encerrado, o bloco `finally` garante o fechamento do socket principal do servidor.
+
+```python
+except KeyboardInterrupt:
+    print("\nServer interrupted.")
+
+finally:
+    server_socket.close()
+```
+
+Essa organização mantém separadas as responsabilidades da aplicação: a thread principal fica responsável exclusivamente por aceitar novas conexões, enquanto as threads criadas ficam responsáveis pelo atendimento individual de cada cliente.
+
+## Rotina de atendimento ao cliente
+
+Após a criação de uma thread para uma nova conexão, a execução do atendimento é transferida para a função `handle_client()`. Essa função atua como ponto de entrada para todo o processamento associado a um cliente específico, recebendo como parâmetros o socket criado exclusivamente para aquela conexão e o endereço do cliente.
+
+A rotina foi organizada como um **pipeline de processamento**, no qual a saída de uma etapa é utilizada como entrada da etapa seguinte. Dessa forma, `handle_client()` não concentra toda a lógica necessária para interpretar e responder à mensagem recebida. Em vez disso, ela coordena a execução de funções menores, cada uma responsável por uma etapa específica do atendimento.
+
+O fluxo geral realizado pela função pode ser representado da seguinte forma:
+
+```text
+Conexão estabelecida
+        |
+        v
+Recebimento da mensagem
+   (receive_request)
+        |
+        v
+Interpretação da mensagem
+    (parse_request)
+        |
+        v
+Processamento da solicitação
+   (process_request)
+        |
+        v
+Envio da resposta
+      (sendall)
+        |
+        v
+Fechamento da conexão
+```
+
+Inicialmente, `receive_request()` obtém os dados enviados pelo cliente por meio do socket. A mensagem recebida é então encaminhada para `parse_request()`, responsável por interpretar sua estrutura e extrair as informações necessárias para as etapas seguintes. O resultado dessa interpretação é passado para `process_request()`, que concentra o processamento da solicitação, incluindo sua validação, a identificação e leitura do recurso solicitado e a construção da resposta correspondente. Por fim, a resposta produzida é enviada ao cliente através do método `sendall()`.
+
+Essa organização permite que `handle_client()` funcione principalmente como uma função de **coordenação do fluxo de atendimento**, enquanto as responsabilidades específicas permanecem isoladas em outras rotinas. Além de tornar o código mais legível, essa divisão facilita a análise individual de cada etapa e evita que detalhes de interpretação, acesso a arquivos e construção de respostas sejam concentrados em uma única função.
+
+Todo esse fluxo é executado dentro da thread criada para a conexão correspondente. Assim, eventuais operações realizadas durante o atendimento de um cliente não impedem que a thread principal do servidor continue aceitando novas conexões. Ao término do processamento, independentemente de seu resultado, o socket associado ao cliente é fechado no bloco `finally`, encerrando a conexão utilizada por aquela thread.
