@@ -170,3 +170,90 @@ Inicialmente, `receive_request()` obtém os dados enviados pelo cliente por meio
 Essa organização permite que `handle_client()` funcione principalmente como uma função de **coordenação do fluxo de atendimento**, enquanto as responsabilidades específicas permanecem isoladas em outras rotinas. Além de tornar o código mais legível, essa divisão facilita a análise individual de cada etapa e evita que detalhes de interpretação, acesso a arquivos e construção de respostas sejam concentrados em uma única função.
 
 Todo esse fluxo é executado dentro da thread criada para a conexão correspondente. Assim, eventuais operações realizadas durante o atendimento de um cliente não impedem que a thread principal do servidor continue aceitando novas conexões. Ao término do processamento, independentemente de seu resultado, o socket associado ao cliente é fechado no bloco `finally`, encerrando a conexão utilizada por aquela thread.
+
+### Recebimento da mensagem
+
+A primeira etapa do pipeline de atendimento é realizada pela função `receive_request()`, responsável por receber os dados enviados pelo cliente através do socket associado à conexão.
+
+```python
+def receive_request(connection_socket):
+    """
+    Recebe os dados enviados pelo cliente e retorna a mensagem decodificada.
+
+    A interpretação e validação da mensagem são  realizadas posteriormente.
+    """
+    return connection_socket.recv(BUFFER_SIZE).decode()
+```
+
+A função recebe como parâmetro `connection_socket`, que corresponde ao socket criado especificamente para a comunicação com o cliente atendido pela thread atual. Sobre esse socket é executado o método `recv()`, que realiza a leitura dos dados disponíveis na conexão.
+
+O valor máximo recebido em uma única chamada é definido pela constante `BUFFER_SIZE`, configurada como `1024` bytes. Dessa forma, nesta implementação, considera-se que os dados necessários para o processamento da mensagem podem ser obtidos por meio de uma única operação de leitura com o tamanho do buffer. 
+
+Como nessa implementação somente é necessário capturar as informações da "request line", estou supondo que toda os bytes necessários podem ser lidos com apenas uma operação de leitura. Nos testes realizados não houve nenhum erro relacionado à necessidade de fazer mais de uma conexão.
+
+![Estrutura da mensagem HTTP](img/image.png)
+
+Como o método `recv()` retorna os dados no formato de bytes, é utilizado o método `decode()` para convertê-los em uma string antes de encaminhá-los para a próxima etapa do pipeline.
+
+É importante destacar que essa função possui somente a responsabilidade de **receber e decodificar os dados**. Nenhuma interpretação ou validação da estrutura da mensagem é realizada nesse momento. O conteúdo retornado é posteriormente encaminhado para a rotina `parse_request()`, responsável por analisar sua estrutura e extrair as informações utilizadas pelo servidor. Essa rotina e as seguintes serão responsáveis por lidar com e tratar a mensagem traduzida na rotina `receive_request()`
+
+### Interpretação da mensagem
+
+Após o recebimento e a decodificação dos dados enviados pelo cliente, a próxima etapa do pipeline é realizada pela função `parse_request()`. Sua responsabilidade é interpretar a mensagem recebida de acordo com a estrutura esperada para uma requisição HTTP e extrair apenas as informações necessárias para o restante do processamento.
+
+```python
+def parse_request(message):
+    """
+    Interpreta a mensagem recebida como uma requisição HTTP e extrai somente as informações necessárias ao servidor:
+    método, URL e versão HTTP.
+    """
+    request_line = message.split("\r\n", 1)[0]
+    fields = request_line.split()
+
+    if len(fields) != 3:
+        return None
+
+    method, url, version = fields
+
+    return {
+        "method": method.upper(),
+        "url": url,
+        "version": version.upper()
+    }
+```
+Esta rotina 
+
+# Testes e execução:
+
+O programa foi executado no labotário IC-300, em dois computadores diferentes, logados no meu usuário. Para tanto, o programa servidor foi executado com "python3 server.py" no primeiro computador e acessado por um segundo.
+
+
+Exemplo com o servidor sendo executado no computador beatles (143.106.16.12) e o cliente no computador sabbath (143.106.16.13). Nos testes utilizei o navegador Mozila 5.0. Durante a execução, o cliente enviou requisições do tipo:
+
+```text
+GET /favicon.ico HTTP/1.1
+Host: 143.106.16.12:12000
+User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:154.0) Gecko/20100101 Firefox/154.0
+Accept: image/avif,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5
+Accept-Language: en-US,en;q=0.9
+Accept-Encoding: gzip, deflate
+Connection: keep-alive
+Referer: http://143.106.16.12:12000/
+Priority: u=6
+```
+```text
+GET / HTTP/1.1
+Host: 143.106.16.12:12000
+User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:154.0) Gecko/20100101 Firefox/154.0
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: en-US,en;q=0.9
+Accept-Encoding: gzip, deflate
+Connection: keep-alive
+Upgrade-Insecure-Requests: 1
+Priority: u=0, i
+```
+Um exemplo de resposta para quando quando foi retornado o recurso index.html foi:
+```text
+b'HTTP/1.1 200 OK\r\nContent-Length: 900\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n<!DOCTYPE html>\n<html lang="pt-BR">\n<head>\n    <meta charset="UTF-8">\n    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n    <title>Servidor MC833</title>\n    <link rel="icon" href="/favicon.ico">\n</head>\n<body>\n    <h1>Servidor Web - MC833</h1>\n\n    <p>\n        Este servidor foi implementado em Python utilizando sockets TCP\n        para atender requisi\xc3\xa7\xc3\xb5es HTTP GET.\n    </p>\n\n    <h2>Arquivos dispon\xc3\xadveis</h2>\n    <ul>\n        <li>\n            <a href="/server.py">server.py</a> \xe2\x80\x94 implementa\xc3\xa7\xc3\xa3o do servidor.\n        </li>\n        <li>\n            <a href="/favicon.ico">favicon.ico</a> \xe2\x80\x94 \xc3\xadcone utilizado pelo navegador.\n        </li>\n        <li>\n            <a href="/index.html">index.html</a> \xe2\x80\x94 p\xc3\xa1gina inicial do servidor.\n        </li>\n    </ul>\n\n    <p>\n        Para acessar um arquivo, utilize a URL correspondente no navegador.\n    </p>\n</body>\n</html>'
+```
+
