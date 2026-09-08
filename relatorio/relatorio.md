@@ -7,3 +7,19 @@ A implementação foi desenvolvida a partir dos conceitos de programação em re
 A organização do código priorizou legibilidade, modularidade e facilidade de compreensão. Para isso, as diferentes responsabilidades do servidor foram divididas em etapas bem definidas, como o recebimento dos dados pelo socket, a interpretação e validação da requisição, a identificação e leitura do recurso solicitado e a construção da resposta HTTP. Essa organização também busca facilitar a descrição e a análise de cada etapa ao longo deste relatório. Por se tratar de uma implementação de caráter didático, foram priorizados os requisitos propostos e os conceitos abordados na disciplina, sem a pretensão de reproduzir todos os mecanismos de robustez, segurança e otimização encontrados em servidores Web reais destinados a ambientes de produção. Por isso, não foram implementadas tratativas que vão além do escopo definido pelas orientações do laboratório.
 
 Os testes apresentados neste trabalho serão realizados utilizando o navegador [NOME DO NAVEGADOR], versão [VERSÃO], disponível nos computadores do laboratório. A especificação do navegador e de sua versão é relevante, pois diferenças na forma como cada navegador constrói e envia requisições HTTP podem influenciar o comportamento observado durante os testes.
+
+# Hipóteses e decisões de projeto
+
+Para delimitar o comportamento esperado do servidor e manter a implementação compatível com o escopo proposto para o projeto, foram adotadas algumas hipóteses e decisões de projeto.
+
+O servidor considera apenas requisições que utilizem o protocolo **HTTP/1.1** e o método **GET**. Além disso, o programa foi desenvolvido considerando requisições HTTP com estrutura válida e previsível, como aquelas produzidas pelos navegadores utilizados durante os testes. Requisições malformadas, que utilizem outros métodos HTTP ou versões diferentes do protocolo não fazem parte do funcionamento esperado da aplicação. Alguns desses casos foram mapeados para respostas HTTP específicas, indicando que a requisição, a operação ou a versão do protocolo não é suportada.
+
+Os recursos solicitados pelo cliente correspondem a arquivos disponíveis localmente no diretório de execução do servidor. Quando o cliente realiza uma requisição para a raiz (`/`), considera-se que o recurso solicitado é o arquivo `index.html`.
+
+Cada conexão TCP é utilizada para o atendimento de uma requisição e encerrada após o envio da respectiva resposta HTTP. Dessa forma, não foi implementado o mecanismo de conexões persistentes do HTTP/1.1.
+
+Considera-se também que a requisição HTTP enviada pelo cliente pode ser recebida integralmente utilizando o buffer definido pela aplicação, de **1024 bytes**. Assim, o servidor realiza uma única operação de recebimento para obter os dados necessários à interpretação da requisição. Essa simplificação é suficiente para os casos de teste previstos neste trabalho, mas não contempla situações em que a requisição seja maior que o buffer ou seja recebida de forma fragmentada em múltiplas operações de leitura do socket.
+
+Os arquivos solicitados são lidos em modo binário, permitindo que o servidor envie tanto arquivos de texto quanto imagens e outros tipos de conteúdo. O tipo MIME do recurso é determinado a partir da extensão do arquivo e incluído no cabeçalho `Content-Type` da resposta. Caso o tipo do arquivo não possa ser identificado, é utilizado como fallback o tipo genérico `application/octet-stream`. Para os arquivos disponibilizados como parte do Servidor Web utilizado nos testes, espera-se que seus respectivos tipos MIME possam ser identificados normalmente.
+
+Por se tratar de uma implementação de caráter didático, foram priorizados os requisitos definidos para o projeto e os conceitos abordados na disciplina. Dessa forma, não foram implementados mecanismos adicionais de segurança, robustez, otimização ou compatibilidade que ultrapassem o escopo estabelecido para o trabalho.
