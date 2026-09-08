@@ -1,6 +1,6 @@
 from socket import *
+from threading import Thread
 import mimetypes
-
 
 SERVER_PORT = 12000
 BUFFER_SIZE = 1024
@@ -191,7 +191,12 @@ def main():
             print("Ready to serve...")
 
             connection_socket, addr = server_socket.accept()
-            handle_client(connection_socket, addr)
+            client_thread = Thread(
+                target=handle_client,
+                args=(connection_socket, addr)
+            )
+
+            client_thread.start()
 
     except KeyboardInterrupt:
         print("\nServer interrupted.")
