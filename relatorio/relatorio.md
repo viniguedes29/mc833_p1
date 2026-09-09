@@ -6,7 +6,7 @@ A implementação foi desenvolvida a partir dos conceitos de programação em re
 
 A organização do código priorizou legibilidade, modularidade e facilidade de compreensão. Para isso, as diferentes responsabilidades do servidor foram divididas em etapas bem definidas, como o recebimento dos dados pelo socket, a interpretação e validação da requisição, a identificação e leitura do recurso solicitado e a construção da resposta HTTP. Essa organização também busca facilitar a descrição e a análise de cada etapa ao longo deste relatório. Por se tratar de uma implementação de caráter didático, foram priorizados os requisitos propostos e os conceitos abordados na disciplina, sem a pretensão de reproduzir todos os mecanismos de robustez, segurança e otimização encontrados em servidores Web reais destinados a ambientes de produção. Por isso, não foram implementadas tratativas que vão além do escopo definido pelas orientações do laboratório.
 
-Os testes apresentados neste trabalho serão realizados utilizando o navegador [NOME DO NAVEGADOR], versão [VERSÃO], disponível nos computadores do laboratório. A especificação do navegador e de sua versão é relevante, pois diferenças na forma como cada navegador constrói e envia requisições HTTP podem influenciar o comportamento observado durante os testes.
+Os testes apresentados neste trabalho serão realizados utilizando o navegador Firefox, versão 154.0, disponível nos computadores do laboratório. A especificação do navegador e de sua versão é relevante, pois diferenças na forma como cada navegador constrói e envia requisições HTTP podem influenciar o comportamento observado durante os testes.
 
 # Hipóteses e decisões de projeto
 
@@ -189,7 +189,8 @@ A função recebe como parâmetro `connection_socket`, que corresponde ao socket
 
 O valor máximo recebido em uma única chamada é definido pela constante `BUFFER_SIZE`, configurada como `1024` bytes. Dessa forma, nesta implementação, considera-se que os dados necessários para o processamento da mensagem podem ser obtidos por meio de uma única operação de leitura com o tamanho do buffer. 
 
-Como nessa implementação somente é necessário capturar as informações da "request line", estou supondo que toda os bytes necessários podem ser lidos com apenas uma operação de leitura. Nos testes realizados não houve nenhum erro relacionado à necessidade de realizar mais de uma operação de leitura.
+Nesta implementação, considera-se que todos os bytes necessários para a obtenção da *request line* podem ser recebidos em uma única operação de leitura. Nos testes realizados não houve nenhum erro relacionado à necessidade de realizar mais de uma operação de leitura.
+
 ![Estrutura da mensagem HTTP](img/image.png)
 
 Como o método `recv()` retorna os dados no formato de bytes, é utilizado o método `decode()` para convertê-los em uma string antes de encaminhá-los para a próxima etapa do pipeline.
