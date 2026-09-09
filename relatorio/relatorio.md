@@ -24,7 +24,22 @@ Os arquivos solicitados são lidos em modo binário, permitindo que o servidor e
 
 Por se tratar de uma implementação de caráter didático, foram priorizados os requisitos definidos para o projeto e os conceitos abordados na disciplina. Dessa forma, não foram implementados mecanismos adicionais de segurança, robustez, otimização ou compatibilidade que ultrapassem o escopo estabelecido para o trabalho.
 
-# Descrição geral e casos de uso
+# Casos de uso.
+
+Os principais casos de uso do servidor estão resumidos na tabela a seguir:
+
+| Caso de uso | Requisição do cliente | Comportamento esperado do servidor |
+|---|---|---|
+| Acesso à página inicial | `GET / HTTP/1.1` | Associar a URL `/` ao arquivo `index.html` e retornar `200 OK` com seu conteúdo. |
+| Acesso a recurso existente | `GET /arquivo HTTP/1.1` | Localizar o arquivo solicitado no diretório local e retornar `200 OK` com seu conteúdo. |
+| Acesso a recurso inexistente | `GET /arquivo_inexistente HTTP/1.1` | Identificar que o recurso não está disponível e retornar `404 Not Found`. |
+| Requisição com versão HTTP não suportada | Requisição com versão diferente de `HTTP/1.1` | Retornar `505 HTTP Version Not Supported`. |
+| Requisição com método não implementado | Requisição com método diferente de `GET` | Retornar `501 Not Implemented`. |
+| Atendimento concorrente | Múltiplas conexões estabelecidas em intervalos próximos | Criar uma thread separada para cada conexão, mantendo a thread principal disponível para aceitar novos clientes. |
+
+Esses casos representam os principais comportamentos previstos para a aplicação e servem como referência para a descrição da implementação e para os testes apresentados posteriormente.
+
+# Descrição geral da aplicação.
 
 O funcionamento do servidor foi organizado de forma modular, com cada etapa do processamento sendo atribuída a uma função específica. De maneira geral, a aplicação inicia e configura um socket TCP, permanece aguardando conexões de clientes e, a cada nova conexão recebida, cria uma thread responsável por realizar o atendimento daquele cliente. A partir dessa thread, a mensagem recebida pela conexão é processada pelo servidor. Inicialmente, os dados são recebidos pelo socket e interpretados de acordo com a estrutura esperada para uma requisição HTTP. Em seguida, são realizadas as etapas de validação da mensagem, identificação do recurso solicitado, leitura do arquivo correspondente e construção e envio da resposta ao cliente.
 
