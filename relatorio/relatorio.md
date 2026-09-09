@@ -189,13 +189,12 @@ A função recebe como parâmetro `connection_socket`, que corresponde ao socket
 
 O valor máximo recebido em uma única chamada é definido pela constante `BUFFER_SIZE`, configurada como `1024` bytes. Dessa forma, nesta implementação, considera-se que os dados necessários para o processamento da mensagem podem ser obtidos por meio de uma única operação de leitura com o tamanho do buffer. 
 
-Como nessa implementação somente é necessário capturar as informações da "request line", estou supondo que toda os bytes necessários podem ser lidos com apenas uma operação de leitura. Nos testes realizados não houve nenhum erro relacionado à necessidade de fazer mais de uma conexão.
-
+Como nessa implementação somente é necessário capturar as informações da "request line", estou supondo que toda os bytes necessários podem ser lidos com apenas uma operação de leitura. Nos testes realizados não houve nenhum erro relacionado à necessidade de realizar mais de uma operação de leitura.
 ![Estrutura da mensagem HTTP](img/image.png)
 
 Como o método `recv()` retorna os dados no formato de bytes, é utilizado o método `decode()` para convertê-los em uma string antes de encaminhá-los para a próxima etapa do pipeline.
 
-É importante destacar que essa função possui somente a responsabilidade de **receber e decodificar os dados**. Nenhuma interpretação ou validação da estrutura da mensagem é realizada nesse momento. O conteúdo retornado é posteriormente encaminhado para a rotina `parse_request()`, responsável por analisar sua estrutura e extrair as informações utilizadas pelo servidor. Essa rotina e as seguintes serão responsáveis por lidar com e tratar a mensagem traduzida na rotina `receive_request()`
+É importante destacar que essa função possui somente a responsabilidade de **receber e decodificar os dados**. Nenhuma interpretação ou validação da estrutura da mensagem é realizada nesse momento. O conteúdo retornado é posteriormente encaminhado para a rotina `parse_request()`, responsável por analisar sua estrutura e extrair as informações utilizadas pelo servidor. Essa rotina e as seguintes serão responsáveis por lidar com e tratar a mensagem decodificada na rotina `receive_request()`
 
 ### Interpretação da mensagem
 
@@ -222,7 +221,7 @@ def parse_request(message):
     }
 ```
 
-Como visto anteriorment, uma requisição HTTP possui uma linha inicial, chamada request line, que contém o método utilizado, o recurso solicitado e a versão do protocolo. Como essas são as únicas informações necessárias para o processamento realizado pelo servidor, a primeira operação da função consiste em isolar essa linha da mensagem completa recebida.
+Como visto anteriormente, uma requisição HTTP possui uma linha inicial, chamada request line, que contém o método utilizado, o recurso solicitado e a versão do protocolo. Como essas são as únicas informações necessárias para o processamento realizado pelo servidor, a primeira operação da função consiste em isolar essa linha da mensagem completa recebida.
 
 ```python
 request_line = message.split("\r\n", 1)[0]
@@ -274,7 +273,10 @@ Gerando a partir de `GET /index.html HTTP/1.1`:
 }
 ```
 
-Esta estapa não realiza validações de conteúdo. Caso não haja os 3 campos de interesse na primeira linha da requisição, retorna `None`.
+Os campos `method` e `version` são convertidos para letras maiúsculas para simplificar as comparações realizadas posteriormente. A URL é mantida sem alterações, pois será utilizada como caminho para identificação do recurso solicitado.
+
+Esta etapa não realiza a validação do método ou da versão HTTP. Ela verifica apenas se a linha de requisição possui os três campos esperados. Caso essa estrutura mínima não seja encontrada, a função retorna `None`, indicando que a mensagem não pôde ser interpretada no formato esperado.
+
 
 Essa representação é utilizada pelas etapas seguintes do pipeline, permitindo que o restante da aplicação trabalhe diretamente com os campos relevantes da requisição, sem precisar interpretar novamente a mensagem HTTP original.
 
