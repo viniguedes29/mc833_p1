@@ -235,7 +235,7 @@ python3 server.py
 
 A partir da máquina cliente, o servidor foi acessado através do navegador Firefox 154.0, utilizando o endereço IP da máquina servidor e a porta definida pela aplicação. O acompanhamento das requisições realizadas pelo navegador foi feito por meio das Ferramentas do Desenvolvedor, na aba Rede (Network), que permite visualizar as requisições HTTP enviadas pelo cliente e as respostas recebidas do servidor.
 
-A Figura abaixo apresenta um exemplo desse monitoramento durante a execução dos testes, trazendo a requisição para o arquivo `index.html` e `favicon.ico`
+A figura abaixo apresenta um exemplo desse monitoramento durante a execução dos testes, exibindo as requisições realizadas para os recursos `index.html` e `favicon.ico`.
 
 ![Opções do desenvolvedor para monitorar o cliente](img/opcoes-desenvolvedor.png)
 
@@ -255,7 +255,7 @@ Priority: u=0, i
 
 Esse exemplo permite observar a estrutura da mensagem recebida pelo servidor. Apesar de diversos cabeçalhos serem enviados pelo navegador, a implementação utiliza apenas as informações presentes na primeira linha da requisição: o método HTTP, a URL solicitada e a versão do protocolo. Nesse caso, esses valores correspondem, respectivamente, a GET, / e HTTP/1.1.
 
-Como definido nas decisões de projeto, uma requisição para a raiz / é associada ao arquivo index.html. Após a interpretação da mensagem, o servidor identifica o recurso solicitado, realiza sua leitura e constrói a resposta HTTP correspondente.
+Como definido nas decisões de projeto, uma requisição para a raiz `/` é associada ao arquivo `index.html`. Após a interpretação da mensagem, o servidor identifica o recurso solicitado, realiza sua leitura e constrói a resposta HTTP correspondente.
 
 ```text
 HTTP/1.1 200 OK
@@ -267,6 +267,8 @@ Connection: close
 <html lang="pt-BR">
 ...
 ```
+
+A resposta confirma que o arquivo `index.html` foi localizado corretamente e enviado ao navegador. Os campos `Content-Length` e `Content-Type` descrevem, respectivamente, o tamanho do corpo da resposta e o tipo do recurso retornado.
 
 Além da requisição para a página principal, durante os testes foi observado que o navegador Firefox realizou automaticamente uma requisição para o recurso `favicon.ico`. Como essa requisição corresponde a um recurso distinto da página principal, ela também é tratada de forma independente pelo servidor, podendo ser processada em paralelo a outras conexões. A requisição observada foi:
 
@@ -282,4 +284,4 @@ Referer: http://143.106.16.12:12000/
 Priority: u=6
 ```
 
-Assim como na requisição anterior, apenas a primeira linha é necessária para o processamento realizado pela aplicação. Nesse caso, o método identificado é GET, o recurso solicitado é /favicon.ico e a versão utilizada é HTTP/1.1. Como o arquivo está presente no diretório do servidor, ele é lido em modo binário e retornado ao cliente com uma resposta 200 OK e o tipo MIME correspondente.
+Assim como na requisição anterior, apenas a primeira linha é necessária para o processamento realizado pela aplicação. Nesse caso, o método identificado é `GET`, o recurso solicitado é `/favicon.ico` e a versão utilizada é `HTTP/1.1`. Como o arquivo está presente no diretório do servidor, ele é lido em modo binário e retornado ao cliente com uma resposta `200 OK` e o tipo MIME correspondente.
