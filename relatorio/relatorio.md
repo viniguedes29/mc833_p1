@@ -280,6 +280,371 @@ Esta etapa não realiza a validação do método ou da versão HTTP. Ela verific
 
 Essa representação é utilizada pelas etapas seguintes do pipeline, permitindo que o restante da aplicação trabalhe diretamente com os campos relevantes da requisição, sem precisar interpretar novamente a mensagem HTTP original.
 
+### Processamento da requisição
+
+Após a interpretação da mensagem, a estrutura produzida por `parse_request()` é encaminhada para a função `process_request()`. Essa função coordena as etapas necessárias para transformar a requisição interpretada em uma resposta HTTP completa.
+
+```python
+def process_request(request):
+    """
+    Executa o processamento da requisição.
+
+    O pipeline é composto pelas etapas:
+        1. Validação da requisição;
+        2. Identificação do arquivo solicitado;
+        3. Leitura do arquivo;
+        4. Construção da resposta HTTP.
+    """
+
+    error_code = validate_request(request)
+
+    if error_code is not None:
+        return build_response(error_code)
+
+    filename = get_filename(request)
+
+    try:
+        content = read_file(filename)
+
+    except FileNotFoundError:
+        return build_response(404)
+
+    content_type, _ = mimetypes.guess_type(filename)
+
+    if content_type is None:
+        content_type = "application/octet-stream"
+
+    return build_response(
+        200,
+        body=content,
+        content_type=content_type
+    )
+```
+
+A função `process_request()` atua principalmente como uma rotina de **coordenação do processamento**. Em vez de concentrar toda a lógica necessária para tratar a requisição em uma única função, cada operação é delegada a uma rotina específica.
+
+Inicialmente, a requisição é encaminhada para `validate_request()`, que verifica se sua estrutura e seus campos são suportados pela implementação:
+
+```python
+error_code = validate_request(request)
+```
+
+Caso seja identificado algum erro, a função de validação retorna o código HTTP correspondente. Nesse caso, não é necessário continuar o processamento do recurso e a resposta é construída imediatamente:
+
+```python
+if error_code is not None:
+    return build_response(error_code)
+```
+
+Quando a requisição é considerada válida, a próxima etapa consiste em identificar o arquivo correspondente à URL solicitada:
+
+```python
+filename = get_filename(request)
+```
+
+Em seguida, é realizada uma tentativa de leitura desse arquivo. Como a inexistência de um recurso solicitado é uma situação prevista no funcionamento do servidor, essa operação é executada dentro de um bloco `try`:
+
+```python
+try:
+    content = read_file(filename)
+
+except FileNotFoundError:
+    return build_response(404)
+```
+
+Caso o arquivo não seja encontrado, a exceção `FileNotFoundError` é convertida em uma resposta HTTP `404 Not Found`. Quando a leitura ocorre com sucesso, a variável `content` passa a armazenar os bytes que serão utilizados como corpo da resposta.
+
+Antes da construção da resposta de sucesso, o tipo MIME do recurso é determinado a partir de sua extensão utilizando o módulo `mimetypes`:
+
+```python
+content_type, _ = mimetypes.guess_type(filename)
+```
+
+Caso não seja possível identificar o tipo do arquivo, é utilizado o valor genérico `application/octet-stream`.
+
+Por fim, o conteúdo do recurso, seu tipo MIME e o código de sucesso `200 OK` são encaminhados para `build_response()`, que constrói a mensagem HTTP completa que será posteriormente enviada ao cliente.
+
+De maneira simplificada, o fluxo coordenado por `process_request()` pode ser representado como:
+
+```text
+Requisição interpretada
+        |
+        v
+validate_request()
+        |
+        +---- erro ----> build_response(código de erro)
+        |
+        v
+get_filename()
+        |
+        v
+read_file()
+    |       |
+    |       +---- arquivo inexistente ----> 404 Not Found
+    |
+    v
+identificação do tipo MIME
+        |
+        v
+build_response(200, conteúdo)
+```
+
+Essa organização mantém `process_request()` responsável pelo fluxo geral da solicitação, enquanto as operações específicas de validação, identificação do arquivo, leitura e construção da resposta permanecem separadas em funções próprias.
+
+#### Validação da requisição
+
+A primeira etapa realizada por `process_request()` consiste em verificar se a requisição interpretada possui as características suportadas pelo servidor. Essa responsabilidade é delegada à função `validate_request()`:
+
+```python
+def validate_request(request):
+    """
+    Verifica se a requisição possui um formato e características
+    suportadas pelo servidor.
+
+    Retorna None caso a requisição seja válida ou o código HTTP
+    correspondente ao erro encontrado.
+    """
+    if request is None:
+        return 400
+
+    if request["version"] != "HTTP/1.1":
+        return 505
+
+    if request["method"] != "GET":
+        return 501
+
+    return None
+```
+
+A função recebe a representação produzida anteriormente por `parse_request()` e verifica, inicialmente, se a mensagem pôde ser interpretada corretamente. Como `parse_request()` retorna `None` quando não encontra os três campos esperados na linha de requisição, esse caso é associado ao código `400 Bad Request`.
+
+Em seguida, é verificada a versão do protocolo HTTP:
+
+```python
+if request["version"] != "HTTP/1.1":
+    return 505
+```
+
+A implementação foi desenvolvida considerando requisições `HTTP/1.1`. Dessa forma, caso seja recebida uma versão diferente, é retornado o código `505 HTTP Version Not Supported`.
+
+Por fim, é verificado o método solicitado:
+
+```python
+if request["method"] != "GET":
+    return 501
+```
+
+Como o escopo do projeto prevê apenas o tratamento de requisições `GET`, outros métodos são associados à resposta `501 Not Implemented`.
+
+Caso nenhuma das condições anteriores seja satisfeita, a função retorna `None`, indicando que nenhum erro foi encontrado e que o processamento pode continuar.
+
+Em `process_request()`, esse resultado é utilizado da seguinte maneira:
+
+```python
+error_code = validate_request(request)
+
+if error_code is not None:
+    return build_response(error_code)
+```
+
+Assim, quando um erro é identificado, o restante do processamento é interrompido e a resposta HTTP correspondente é construída imediatamente.
+
+#### Identificação do recurso solicitado
+
+Após a validação da requisição, o próximo passo consiste em determinar qual arquivo local corresponde à URL solicitada pelo cliente. Essa operação é realizada pela função `get_filename()`:
+
+```python
+def get_filename(request):
+    """
+    Obtém o nome do arquivo solicitado a partir da URL
+    presente na requisição.
+    """
+    url = request["url"]
+
+    if url == "/":
+        return "index.html"
+
+    return url[1:]
+```
+
+A URL obtida durante a interpretação da mensagem contém uma barra `/` no início do caminho. Como os arquivos utilizados pela aplicação são acessados a partir do diretório de execução do servidor, essa barra inicial é removida antes da tentativa de abertura do arquivo.
+
+Por exemplo:
+
+```text
+/index.html   -> index.html
+/favicon.ico  -> favicon.ico
+/teste.txt    -> teste.txt
+```
+
+Também foi definido um tratamento específico para a URL correspondente à raiz do servidor:
+
+```python
+if url == "/":
+    return "index.html"
+```
+
+Dessa forma, quando o navegador realiza uma requisição como:
+
+```text
+GET / HTTP/1.1
+```
+
+o servidor considera que o recurso solicitado é o arquivo `index.html`.
+
+O nome obtido pela função é então retornado para `process_request()`:
+
+```python
+filename = get_filename(request)
+```
+
+Essa separação mantém a interpretação da URL isolada da etapa responsável pelo acesso efetivo ao sistema de arquivos.
+
+#### Leitura do arquivo
+
+Após a identificação do nome do recurso, `process_request()` tenta realizar sua leitura utilizando a função `read_file()`:
+
+```python
+def read_file(filename):
+    """
+    Tenta abrir e ler o arquivo solicitado.
+
+    O arquivo é aberto em modo binário para permitir o envio
+    tanto de arquivos de texto quanto de imagens e outros
+    tipos de conteúdo.
+    """
+    with open(filename, "rb") as file:
+        return file.read()
+```
+
+O arquivo é aberto utilizando o modo `rb`, correspondente à leitura binária. Com isso, o conteúdo retornado pela função já se encontra no formato de bytes utilizado posteriormente pelo socket.
+
+Essa abordagem permite utilizar a mesma rotina para diferentes tipos de recursos. Arquivos textuais, como `index.html` e `teste.txt`, e arquivos binários, como `favicon.ico`, são tratados da mesma maneira durante a leitura.
+
+Em `process_request()`, a chamada é realizada dentro de um bloco `try`:
+
+```python
+try:
+    content = read_file(filename)
+
+except FileNotFoundError:
+    return build_response(404)
+```
+
+Caso o arquivo exista, seu conteúdo é armazenado na variável `content`. Caso contrário, a função `open()` gera uma exceção `FileNotFoundError`, que é capturada por `process_request()` e transformada em uma resposta `404 Not Found`.
+
+Dessa maneira, a inexistência de um recurso solicitado é tratada como uma situação prevista pelo servidor e não como um erro capaz de interromper sua execução.
+
+#### Identificação do tipo do recurso
+
+Quando o arquivo é encontrado e lido corretamente, o servidor determina o tipo de conteúdo que será informado na resposta HTTP.
+
+Para isso, é utilizada a função `guess_type()` do módulo `mimetypes`:
+
+```python
+content_type, _ = mimetypes.guess_type(filename)
+```
+
+A identificação é realizada a partir do nome e da extensão do arquivo. Dessa forma, recursos diferentes podem resultar em valores distintos para o cabeçalho `Content-Type`, como:
+
+```text
+index.html   -> text/html
+favicon.ico  -> image/vnd.microsoft.icon
+teste.txt    -> text/plain
+```
+
+Caso o módulo não consiga identificar o tipo associado ao arquivo, é utilizado o tipo genérico `application/octet-stream`:
+
+```python
+if content_type is None:
+    content_type = "application/octet-stream"
+```
+
+Esse valor permite indicar que o corpo da resposta contém uma sequência genérica de bytes quando não há um tipo MIME mais específico disponível.
+
+Após essa etapa, `process_request()` possui todas as informações necessárias para produzir uma resposta de sucesso: o código HTTP, o conteúdo do arquivo e seu tipo MIME.
+
+#### Construção da resposta HTTP
+
+A construção das respostas enviadas ao cliente é centralizada na função `build_response()`:
+
+```python
+def build_response(status_code, body=b"", content_type="text/plain"):
+    """
+    Constrói a mensagem de resposta HTTP a ser enviada
+    ao cliente.
+    """
+    status_message = STATUS_MESSAGES[status_code]
+
+    header = (
+        f"HTTP/1.1 {status_code} {status_message}\r\n"
+        f"Content-Length: {len(body)}\r\n"
+        f"Content-Type: {content_type}\r\n"
+        "Connection: close\r\n"
+        "\r\n"
+    )
+
+    return header.encode() + body
+```
+
+A função recebe o código de status HTTP e, opcionalmente, o corpo da mensagem e o tipo do conteúdo. Para obter a descrição correspondente ao código, é utilizado o dicionário `STATUS_MESSAGES`.
+
+Por exemplo:
+
+```python
+STATUS_MESSAGES = {
+    200: "OK",
+    400: "Bad Request",
+    404: "Not Found",
+    501: "Not Implemented",
+    505: "HTTP Version Not Supported"
+}
+```
+
+Com essas informações, é construída inicialmente a linha de status da resposta. Para uma requisição atendida com sucesso, por exemplo, a primeira linha será:
+
+```text
+HTTP/1.1 200 OK
+```
+
+Em seguida, são adicionados os cabeçalhos utilizados pela implementação. `Content-Length` informa o tamanho do corpo da mensagem em bytes, enquanto `Content-Type` apresenta o tipo MIME determinado anteriormente.
+
+O cabeçalho:
+
+```text
+Connection: close
+```
+
+indica que a conexão será encerrada após o envio da resposta, de acordo com a decisão adotada nesta implementação de utilizar uma requisição por conexão.
+
+A sequência:
+
+```python
+"\r\n"
+```
+
+adicionada após os cabeçalhos produz a linha vazia que separa o cabeçalho HTTP do corpo da resposta.
+
+Como o cabeçalho é construído inicialmente como uma string, ele é convertido para bytes através de `encode()` antes de ser concatenado ao corpo:
+
+```python
+return header.encode() + body
+```
+
+Dessa forma, a função retorna uma única sequência de bytes contendo toda a resposta HTTP, já preparada para ser enviada pelo socket.
+
+No caso em que o recurso foi encontrado com sucesso, `process_request()` chama essa função da seguinte forma:
+
+```python
+return build_response(
+    200,
+    body=content,
+    content_type=content_type
+)
+```
+
+Assim, o resultado final de `process_request()` é sempre uma mensagem HTTP completa, seja ela uma resposta de sucesso ou uma resposta correspondente a algum erro identificado durante o processamento.
+
 # Testes e execução
 
 Os testes da aplicação foram realizados no laboratório IC-300, utilizando duas máquinas distintas da rede do Instituto de Computação. O servidor foi executado na máquina `beatles`, com endereço IP `143.106.16.12`, enquanto o cliente foi executado na máquina `sabbath`, com endereço IP `143.106.16.13`.
