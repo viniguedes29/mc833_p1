@@ -221,7 +221,62 @@ def parse_request(message):
         "version": version.upper()
     }
 ```
-Esta rotina 
+
+Como visto anteriorment, uma requisição HTTP possui uma linha inicial, chamada request line, que contém o método utilizado, o recurso solicitado e a versão do protocolo. Como essas são as únicas informações necessárias para o processamento realizado pelo servidor, a primeira operação da função consiste em isolar essa linha da mensagem completa recebida.
+
+```python
+request_line = message.split("\r\n", 1)[0]
+```
+
+A sequência `\r\n` representa o final de uma linha na mensagem HTTP. O parâmetro 1 utilizado em `split()` limita a divisão à primeira ocorrência, de forma que apenas a primeira linha da mensagem seja separada do restante dos cabeçalhos. Por exemplo, a partir de uma requisição como:
+
+```text
+GET /index.html HTTP/1.1
+Host: 143.106.16.12:12000
+User-Agent: Mozilla/5.0
+...
+```
+
+A variável `request_line` passa a conter somente:
+
+```text
+GET /index.html HTTP/1.1
+```
+
+Em seguida, essa linha é dividida utilizando os espaços como separadores:
+```python
+fields = request_line.split()
+```
+Para uma requisição no formato esperado, são obtidos exatamente três campos:
+```text
+GET /index.html HTTP/1.1
+ |        |        |
+ |        |        +--> versão HTTP
+ |        +-----------> URL do recurso
+ +--------------------> método HTTP
+ ```
+
+ Quando a mensagem possui o formato esperado, os três valores são armazenados nas variáveis `method`, `url` e `version`. Em seguida, é construída uma estrutura do tipo dicionário contendo essas informações:
+```python
+ {
+    "method": method.upper(),
+    "url": url,
+    "version": version.upper()
+}
+```
+
+Gerando a partir de `GET /index.html HTTP/1.1`:
+```python
+{
+    "method": "GET",
+    "url": "/index.html",
+    "version": "HTTP/1.1"
+}
+```
+
+Esta estapa não realiza validações de conteúdo. Caso não haja os 3 campos de interesse na primeira linha da requisição, retorna `None`.
+
+Essa representação é utilizada pelas etapas seguintes do pipeline, permitindo que o restante da aplicação trabalhe diretamente com os campos relevantes da requisição, sem precisar interpretar novamente a mensagem HTTP original.
 
 # Testes e execução
 
