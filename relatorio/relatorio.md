@@ -851,3 +851,17 @@ Priority: u=6
 ```
 
 Assim como na requisição anterior, apenas a primeira linha é necessária para o processamento realizado pela aplicação. Nesse caso, o método identificado é `GET`, o recurso solicitado é `/favicon.ico` e a versão utilizada é `HTTP/1.1`. Como o arquivo está presente no diretório do servidor, ele é lido em modo binário e retornado ao cliente com uma resposta `200 OK` e o tipo MIME correspondente.
+
+
+# Conclusão
+
+O desenvolvimento deste projeto permitiu aplicar, de forma prática, os conceitos de redes aprendidos na matéria MC832, entendo melhor como funciona um protocolo de aplicação a partir das especificidades do Procolo HTTP. Além disso, também foi possível entender de forma prática como a camada de aplicação utiliza o conceito de sockets TCP para abstrair as camadas inferiores do modelo OSI.
+
+
+A implementação também atende ao requisito de concorrência através da criação de uma thread separada para cada conexão aceita pelo servidor. Dessa forma, a thread principal permanece disponível para receber novas conexões enquanto os clientes já conectados são atendidos independentemente. Esse modelo permite que diferentes requisições sejam processadas de forma concorrente e corresponde ao comportamento solicitado para o servidor.
+
+A partir do modelo de implementação modular, foi possível entender cada etapa do processamento de uma mensagem do Cliente para o Servidor e o protocolo em mínimos detalhes, bem como também entender melhor toda a parte de comunicação de processos em rede. Também foi possível entender detalhes de implementação do navegador, como o carregamento do ícone da página. Os testes realizados através de um navegador em uma máquina distinta daquela em que o servidor foi executado permitiram observar diretamente as requisições e respostas HTTP trocadas entre cliente e servidor. O uso das ferramentas de desenvolvedor do navegador também possibilitou acompanhar os recursos solicitados e verificar o comportamento da aplicação durante sua execução, atendendo à orientação de validar o programa utilizando cliente e servidor em computadores diferentes.
+
+Por se tratar de uma implementação de caráter didático, algumas simplificações foram adotadas. Entre elas, considera-se que os dados necessários para a interpretação da requisição podem ser obtidos em uma única chamada a `recv()`, apenas requisições `GET` utilizando `HTTP/1.1` são tratadas como válidas, e cada conexão é encerrada após o envio de uma única resposta. Também não foram implementados mecanismos adicionais de segurança, otimização ou compatibilidade presentes em servidores Web destinados a ambientes de produção.
+
+Ainda assim, dentro do escopo proposto, o projeto permitiu compreender na prática a relação entre a aplicação HTTP e a interface do serviço de transporte fornecido pelo TCP, o funcionamento dos sockets no estabelecimento da comunicação cliente-servidor e a utilização de threads como mecanismo de concorrência. Dessa forma, os objetivos definidos para o projeto foram alcançados por meio de uma implementação simples, modular e compatível com os requisitos apresentados.
