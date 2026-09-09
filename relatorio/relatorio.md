@@ -223,12 +223,52 @@ def parse_request(message):
 ```
 Esta rotina 
 
-# Testes e execução:
+# Testes e execução
 
-O programa foi executado no labotário IC-300, em dois computadores diferentes, logados no meu usuário. Para tanto, o programa servidor foi executado com "python3 server.py" no primeiro computador e acessado por um segundo.
+Os testes da aplicação foram realizados no laboratório IC-300, utilizando duas máquinas distintas da rede do Instituto de Computação. O servidor foi executado na máquina `beatles`, com endereço IP `143.106.16.12`, enquanto o cliente foi executado na máquina `sabbath`, com endereço IP `143.106.16.13`.
 
+Na máquina servidor, a aplicação foi iniciada por meio do comando:
 
-Exemplo com o servidor sendo executado no computador beatles (143.106.16.12) e o cliente no computador sabbath (143.106.16.13). Nos testes utilizei o navegador Mozila 5.0. Durante a execução, o cliente enviou requisições do tipo:
+```bash
+python3 server.py
+```
+
+A partir da máquina cliente, o servidor foi acessado através do navegador Firefox 154.0, utilizando o endereço IP da máquina servidor e a porta definida pela aplicação. O acompanhamento das requisições realizadas pelo navegador foi feito por meio das Ferramentas do Desenvolvedor, na aba Rede (Network), que permite visualizar as requisições HTTP enviadas pelo cliente e as respostas recebidas do servidor.
+
+A Figura abaixo apresenta um exemplo desse monitoramento durante a execução dos testes, trazendo a requisição para o arquivo `index.html` e `favicon.ico`
+
+![Opções do desenvolvedor para monitorar o cliente](img/opcoes-desenvolvedor.png)
+
+Durante o acesso à página inicial do servidor, o navegador realizou uma requisição semelhante à seguinte:
+
+```text
+GET / HTTP/1.1
+Host: 143.106.16.12:12000
+User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:154.0) Gecko/20100101 Firefox/154.0
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+Accept-Language: en-US,en;q=0.9
+Accept-Encoding: gzip, deflate
+Connection: keep-alive
+Upgrade-Insecure-Requests: 1
+Priority: u=0, i
+```
+
+Esse exemplo permite observar a estrutura da mensagem recebida pelo servidor. Apesar de diversos cabeçalhos serem enviados pelo navegador, a implementação utiliza apenas as informações presentes na primeira linha da requisição: o método HTTP, a URL solicitada e a versão do protocolo. Nesse caso, esses valores correspondem, respectivamente, a GET, / e HTTP/1.1.
+
+Como definido nas decisões de projeto, uma requisição para a raiz / é associada ao arquivo index.html. Após a interpretação da mensagem, o servidor identifica o recurso solicitado, realiza sua leitura e constrói a resposta HTTP correspondente.
+
+```text
+HTTP/1.1 200 OK
+Content-Length: 900
+Content-Type: text/html
+Connection: close
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+...
+```
+
+Além da requisição para a página principal, durante os testes foi observado que o navegador Firefox realizou automaticamente uma requisição para o recurso `favicon.ico`. Como essa requisição corresponde a um recurso distinto da página principal, ela também é tratada de forma independente pelo servidor, podendo ser processada em paralelo a outras conexões. A requisição observada foi:
 
 ```text
 GET /favicon.ico HTTP/1.1
@@ -241,19 +281,5 @@ Connection: keep-alive
 Referer: http://143.106.16.12:12000/
 Priority: u=6
 ```
-```text
-GET / HTTP/1.1
-Host: 143.106.16.12:12000
-User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:154.0) Gecko/20100101 Firefox/154.0
-Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
-Accept-Language: en-US,en;q=0.9
-Accept-Encoding: gzip, deflate
-Connection: keep-alive
-Upgrade-Insecure-Requests: 1
-Priority: u=0, i
-```
-Um exemplo de resposta para quando quando foi retornado o recurso index.html foi:
-```text
-b'HTTP/1.1 200 OK\r\nContent-Length: 900\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n<!DOCTYPE html>\n<html lang="pt-BR">\n<head>\n    <meta charset="UTF-8">\n    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n    <title>Servidor MC833</title>\n    <link rel="icon" href="/favicon.ico">\n</head>\n<body>\n    <h1>Servidor Web - MC833</h1>\n\n    <p>\n        Este servidor foi implementado em Python utilizando sockets TCP\n        para atender requisi\xc3\xa7\xc3\xb5es HTTP GET.\n    </p>\n\n    <h2>Arquivos dispon\xc3\xadveis</h2>\n    <ul>\n        <li>\n            <a href="/server.py">server.py</a> \xe2\x80\x94 implementa\xc3\xa7\xc3\xa3o do servidor.\n        </li>\n        <li>\n            <a href="/favicon.ico">favicon.ico</a> \xe2\x80\x94 \xc3\xadcone utilizado pelo navegador.\n        </li>\n        <li>\n            <a href="/index.html">index.html</a> \xe2\x80\x94 p\xc3\xa1gina inicial do servidor.\n        </li>\n    </ul>\n\n    <p>\n        Para acessar um arquivo, utilize a URL correspondente no navegador.\n    </p>\n</body>\n</html>'
-```
 
+Assim como na requisição anterior, apenas a primeira linha é necessária para o processamento realizado pela aplicação. Nesse caso, o método identificado é GET, o recurso solicitado é /favicon.ico e a versão utilizada é HTTP/1.1. Como o arquivo está presente no diretório do servidor, ele é lido em modo binário e retornado ao cliente com uma resposta 200 OK e o tipo MIME correspondente.
