@@ -24,7 +24,7 @@ Os arquivos solicitados são lidos em modo binário, permitindo que o servidor e
 
 Por se tratar de uma implementação de caráter didático, foram priorizados os requisitos definidos para o projeto e os conceitos abordados na disciplina. Dessa forma, não foram implementados mecanismos adicionais de segurança, robustez, otimização ou compatibilidade que ultrapassem o escopo estabelecido para o trabalho.
 
-# Casos de uso.
+# Casos de uso
 
 Os principais casos de uso do servidor estão resumidos na tabela a seguir:
 
@@ -39,7 +39,7 @@ Os principais casos de uso do servidor estão resumidos na tabela a seguir:
 
 Esses casos representam os principais comportamentos previstos para a aplicação e servem como referência para a descrição da implementação e para os testes apresentados posteriormente.
 
-# Descrição geral da aplicação.
+# Descrição geral da aplicação
 
 O funcionamento do servidor foi organizado de forma modular, com cada etapa do processamento sendo atribuída a uma função específica. De maneira geral, a aplicação inicia e configura um socket TCP, permanece aguardando conexões de clientes e, a cada nova conexão recebida, cria uma thread responsável por realizar o atendimento daquele cliente. A partir dessa thread, a mensagem recebida pela conexão é processada pelo servidor. Inicialmente, os dados são recebidos pelo socket e interpretados de acordo com a estrutura esperada para uma requisição HTTP. Em seguida, são realizadas as etapas de validação da mensagem, identificação do recurso solicitado, leitura do arquivo correspondente e construção e envio da resposta ao cliente.
 
@@ -660,6 +660,134 @@ return build_response(
 ```
 
 Assim, o resultado final de `process_request()` é sempre uma mensagem HTTP completa, seja ela uma resposta de sucesso ou uma resposta correspondente a algum erro identificado durante o processamento.
+
+# Estruturas de dados
+
+A implementação não necessita de estruturas de dados complexas, uma vez que o servidor mantém apenas as informações necessárias para o processamento de cada requisição. Também não foram criadas estruturas completas para representar mensagens HTTP, como classes ou objetos contendo todos os campos de uma requisição ou resposta. Em vez disso, apenas os dados utilizados pela aplicação são extraídos e armazenados durante o processamento.
+
+Além disso, as informações associadas a cada cliente permanecem locais à thread responsável pelo seu atendimento. Dessa forma, não foi necessário manter uma estrutura global contendo conexões ou requisições em processamento.
+
+As principais estruturas utilizadas pela aplicação são descritas a seguir.
+
+## Representação da requisição
+
+Após o recebimento da mensagem HTTP, a função `parse_request()` extrai apenas os três campos da *request line* utilizados pelo servidor: o método HTTP, a URL e a versão do protocolo.
+
+Essas informações são armazenadas em um dicionário Python:
+
+```python
+{
+    "method": method.upper(),
+    "url": url,
+    "version": version.upper()
+}
+```
+
+Por exemplo, para a linha:
+
+```text
+GET /index.html HTTP/1.1
+```
+
+é produzida a seguinte estrutura:
+
+```python
+{
+    "method": "GET",
+    "url": "/index.html",
+    "version": "HTTP/1.1"
+}
+```
+
+Os demais cabeçalhos presentes na mensagem HTTP não são armazenados, pois não são necessários para os casos de uso previstos nesta implementação. Dessa forma, em vez de manter uma representação completa da requisição recebida, o programa utiliza uma estrutura reduzida contendo somente os campos necessários para as etapas de validação e localização do recurso.
+
+## Mapeamento dos códigos de status HTTP
+
+Para associar os códigos numéricos das respostas HTTP às suas respectivas descrições, é utilizado o dicionário `STATUS_MESSAGES`:
+
+```python
+STATUS_MESSAGES = {
+    200: "OK",
+    400: "Bad Request",
+    404: "Not Found",
+    501: "Not Implemented",
+    505: "HTTP Version Not Supported"
+}
+```
+
+Nesse dicionário, cada chave corresponde a um código de status HTTP e seu valor contém a descrição utilizada na linha inicial da resposta.
+
+Por exemplo, ao construir uma resposta com o código `404`, a expressão:
+
+```python
+STATUS_MESSAGES[404]
+```
+
+retorna:
+
+```text
+Not Found
+```
+
+permitindo a construção da linha:
+
+```text
+HTTP/1.1 404 Not Found
+```
+
+O uso desse dicionário centraliza as mensagens correspondentes aos códigos suportados pelo servidor e evita a repetição dessas informações ao longo do código.
+
+## Conteúdo dos arquivos e resposta HTTP
+
+Os arquivos solicitados pelo cliente são lidos em modo binário. Dessa forma, seu conteúdo é armazenado como um objeto do tipo `bytes`:
+
+```python
+with open(filename, "rb") as file:
+    return file.read()
+```
+
+O uso de `bytes` permite que a mesma representação seja utilizada para arquivos de texto e arquivos binários, como o `favicon.ico`.
+
+A resposta HTTP também não é armazenada em uma estrutura própria. Seus cabeçalhos são inicialmente construídos como uma `string`:
+
+```python
+header = (
+    f"HTTP/1.1 {status_code} {status_message}\r\n"
+    f"Content-Length: {len(body)}\r\n"
+    f"Content-Type: {content_type}\r\n"
+    "Connection: close\r\n"
+    "\r\n"
+)
+```
+
+Em seguida, o cabeçalho é convertido para `bytes` e concatenado diretamente ao corpo da resposta:
+
+```python
+return header.encode() + body
+```
+
+Assim, o resultado de `build_response()` é uma única sequência de bytes contendo a mensagem HTTP completa, já preparada para ser enviada através do socket por meio de `sendall()`.
+
+## Informações das conexões
+
+Ao aceitar uma nova conexão, o método `accept()` fornece o socket utilizado para comunicação com o cliente e seu endereço:
+
+```python
+connection_socket, addr = server_socket.accept()
+```
+
+O objeto `connection_socket` representa a conexão TCP específica daquele cliente, enquanto `addr` contém as informações de endereço fornecidas pela biblioteca de sockets.
+
+Esses valores são encaminhados diretamente para a thread responsável pelo atendimento:
+
+```python
+client_thread = Thread(
+    target=handle_client,
+    args=(connection_socket, addr)
+)
+```
+
+Não é mantida uma lista global de clientes ou de threads. Cada conexão é tratada de forma independente e, ao final de seu processamento, o socket correspondente é fechado. Essa escolha mantém simples o gerenciamento dos dados associados aos clientes e evita a necessidade de sincronização sobre estruturas compartilhadas.
 
 # Testes e execução
 
